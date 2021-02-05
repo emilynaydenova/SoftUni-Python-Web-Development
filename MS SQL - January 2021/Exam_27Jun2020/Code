@@ -1,0 +1,300 @@
+/*Database Fundamentals MSSQL – Washing Machine Service */
+/* -----------------------------------------------------*/
+/* Your task is to implement Washing Machine Service database based on the specs given below.
+Database will include information about broken machines which will be distributed to 
+mechanics through so called “jobs”. 
+Each mechanic may have several jobs and for each job he/she can require some parts. 
+To let the mechanic get whats needed he/she has to make order for a particular part
+also specifying how many of it will be needed (specifying quantity).*/
+
+CREATE DATABASE [Washing Machine Service]
+GO
+USE [Washing Machine Service]
+GO
+
+
+----------01.------------------
+CREATE TABLE Clients
+(
+ClientId int PRIMARY KEY IDENTITY,
+FirstName varchar(50) NOT NULL,
+LastName varchar(50) NOT NULL,
+Phone char(12) CHECK(LEN(Phone) = 12) NOT NULL
+)
+
+CREATE TABLE Mechanics
+(
+MechanicId int PRIMARY KEY IDENTITY,
+FirstName varchar(50) NOT NULL,
+LastName varchar(50) NOT NULL,
+Address varchar(255) NOT NULL
+)
+
+CREATE TABLE Models
+(
+ModelId int PRIMARY KEY IDENTITY,
+[Name] varchar(50) UNIQUE NOT NULL
+)
+
+
+CREATE TABLE Jobs
+(
+JobId int PRIMARY KEY IDENTITY,
+ModelId int REFERENCES Models(ModelId) NOT NULL,
+[Status] varchar(11) NOT NULL DEFAULT 'Pending'
+		CHECK([Status] IN ('Pending', 'In Progress','Finished')),
+ClientId int REFERENCES Clients(ClientId) NOT NULL,
+MechanicId int REFERENCES Mechanics(MechanicId) ,
+IssueDate date NOT NULL,
+FinishDate date 
+)
+
+CREATE TABLE Orders
+(
+OrderId int PRIMARY KEY IDENTITY,
+JobId int REFERENCES Jobs(JobId) NOT NULL,
+IssueDate date,
+Delivered bit DEFAULT 0
+)
+
+CREATE TABLE Vendors
+(
+VendorId int PRIMARY KEY IDENTITY,
+[Name] varchar(50) NOT NULL UNIQUE
+)
+
+CREATE TABLE Parts
+(
+PartId int PRIMARY KEY IDENTITY,
+SerialNumber varchar(50) NOT NULL UNIQUE,
+[Description] varchar(255), 
+Price money NOT NULL CHECK(Price > 0.0 AND Price <= 9999.99),
+VendorId int NOT NULL REFERENCES Vendors(VendorId),
+StockQty int NOT NULL DEFAULT 0 CHECK(StockQty >=0)
+)
+
+
+CREATE TABLE OrderParts
+(
+OrderId int NOT NULL FOREIGN KEY REFERENCES Orders(OrderId),
+PartId int NOT NULL FOREIGN KEY REFERENCES Parts(PartId),
+Quantity int NOT NULL DEFAULT 1 CHECK(Quantity >0),
+CONSTRAINT PK_OrderParts PRIMARY KEY (OrderId,PartId)
+)
+
+CREATE TABLE PartsNeeded
+(
+JobId int NOT NULL FOREIGN KEY REFERENCES Jobs(JobId),
+PartId int NOT NULL FOREIGN KEY REFERENCES Parts(PartId),
+Quantity int NOT NULL DEFAULT 1 CHECK(Quantity > 0),
+CONSTRAINT PK_PartsNeeded PRIMARY KEY (JobId,PartId)
+)
+ 
+
+ ------- 02. ------------------
+ INSERT INTO Clients (FirstName,LastName,Phone)
+VALUES
+('Teri','Ennaco','570-889-5187'),
+('Merlyn','Lawler','201-588-7810'),
+('Georgene','Montezuma','925-615-5185'),
+('Jettie','Mconnell','908-802-3564'),
+('Lemuel','Latzke','631-748-6479'),
+('Melodie','Knipp','805-690-1682'),
+('Candida','Corbley','908-275-8357')
+
+INSERT INTO Parts (SerialNumber,Description,Price,VendorId)
+VALUES
+('WP8182119','Door Boot Seal',117.86,2),
+('W10780048','Suspension Rod',42.81,1),
+('W10841140','Silicone Adhesive',6.77,4),
+('WPY055980','High Temperature Adhesive',13.94,3)
+
+
+----------- 03.--------------------
+UPDATE Jobs
+SET MechanicId = 3, Status = 'In Progress'
+WHERE [Status] = 'Pending'
+ 
+
+
+---------- 04. -------------------
+DELETE FROM OrderParts
+WHERE OrderId = 19
+
+DELETE FROM Orders
+WHERE OrderId = 19
+
+--------- 05. --------------------
+SELECT CONCAT(FirstName,' ',LastName) AS Mechanic, [Status],IssueDate 
+FROM Mechanics m
+JOIN Jobs j ON j.MechanicId = m.MechanicId
+ORDER BY m.MechanicId, IssueDate, JobId
+
+
+-------- 06. -------------------
+SELECT CONCAT(FirstName,' ',LastName) AS Client,
+DATEDIFF(day,IssueDate,'2017-04-24') AS [Days going],
+[Status]
+FROM Clients c
+JOIN Jobs j ON j.ClientId = c.ClientId AND Status <> 'Finished'
+ORDER BY [Days going] DESC, c.ClientId
+
+
+----------- 07. -------------------
+SELECT Mechanic,[Average Days]
+FROM
+(
+SELECT m.MechanicId, CONCAT(FirstName,' ',LastName) AS Mechanic,
+AVG(DATEDIFF(day,IssueDate,FinishDate)) AS [Average Days] 
+FROM Mechanics m
+JOIN Jobs j ON j.MechanicId = m.MechanicId AND FinishDate IS NOT NULL
+GROUP BY m.MechanicId,m.FirstName,m.LastName) s
+ORDER BY MechanicId
+
+
+-------------- 08.------------------------
+SELECT CONCAT(FirstName,' ',LastName) AS Available
+FROM Mechanics m
+LEFT JOIN Jobs j ON j.MechanicId = m.MechanicId
+WHERE  j.JobId IS NULL OR 'Finished' = ALL(SELECT j.[Status] FROM Jobs j  
+              WHERE j.MechanicId = m.MechanicId)	  
+GROUP BY FirstName,LastName,m.MechanicId
+ORDER BY m.MechanicId
+
+
+  --------9.----------- trough Orders------
+  GO
+
+ SELECT j.JobId, ISNULL(SUM(Price * op.Quantity),0.0) AS Total
+ FROM Jobs j
+ LEFT JOIN Orders o ON o.JobId = j.JobId
+ LEFT JOIN OrderParts op ON op.OrderId = o.OrderId     -- Quantity!!!!
+ LEFT JOIN Parts p ON p.PartId = op.PartId
+ --LEFT JOIN PartsNeeded pn ON pn.PartId = p.PartId AND pn.JobId = j.JobId  ----- !!!!!
+  WHERE j.Status = 'Finished' 
+ GROUP BY j.JobID  
+ ORDER BY Total DESC, j.JobId
+ 
+  
+  ---------- 10  -------------------
+ -- !!!!! FULL JOIN Jobs-Orders - NULL are Pending Orders
+
+
+SELECT p.PartId,p.[Description],
+	SUM(pn.Quantity) AS [Required],
+	SUM(p.StockQty) AS [In Stock], 0 AS Ordered
+ FROM Jobs j
+FULL JOIN Orders o ON j.JobId = o.JobId
+JOIN PartsNeeded pn ON pn.JobId = j.JobId
+JOIN Parts p ON p.PartId = pn.PartId
+ WHERE j.Status <> 'Finished' AND o.Delivered IS NULL
+ GROUP BY p.PartId,p.Description
+ HAVING SUM(p.StockQty) < SUM(pn.Quantity) 
+
+ GO
+ ------------- 11. --------------------
+ CREATE PROC usp_PlaceOrder @JobId int, @SerialNumber varchar(50),@Quantity int
+ AS
+  
+IF NOT EXISTS (SELECT JobId FROM Jobs WHERE JobId = @JobId) 
+	THROW 50013, 'Job not found!' , 1
+ELSE
+	DECLARE @JobStatus varchar(11) = (SELECT [Status] FROM Jobs WHERE JobId = @JobId)
+
+IF @JobStatus = 'Finished'
+	THROW 50011, 'This job is not active!', 1
+
+
+IF NOT EXISTS (SELECT PartId FROM Parts WHERE SerialNumber = @SerialNumber)
+	THROW 50014, 'Part not found!' , 1
+ELSE
+     DECLARE @PartId int = (SELECT PartId FROM Parts WHERE SerialNumber = @SerialNumber)
+
+
+IF @Quantity <= 0 
+	THROW 50012, 'Part quantity must be more than zero!', 1
+
+DECLARE @OrderId int 
+IF EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId AND 
+							IssueDate IS NULL)
+	BEGIN
+	SET @OrderId =(SELECT TOP(1) OrderId FROM Orders WHERE JobId=@JobId AND 
+							IssueDate IS NULL) 
+	IF NOT EXISTS (SELECT PartId FROM OrderParts 
+					WHERE OrderId = @OrderId AND PartId = @PartId)
+		BEGIN 
+		INSERT INTO OrderParts (OrderId,PartId,Quantity)
+			VALUES (@OrderId, @PartId, @Quantity)
+		END
+	ELSE
+		BEGIN
+		UPDATE OrderParts
+		SET Quantity +=@Quantity
+		WHERE OrderId = @OrderId AND PartId = @PartId
+		END
+	END
+ELSE
+	BEGIN
+		INSERT INTO Orders (JobId,IssueDate)
+				VALUES (@JobId,NULL)
+		SET @OrderId = (SELECT OrderId FROM Orders
+						  WHERE JobId = @JobId AND IssueDate IS NULL)
+		INSERT INTO OrderParts (OrderId,PartId,Quantity)
+		VALUES (@OrderId, @PartId,@Quantity)
+	END
+ 
+GO
+------------------------
+ DECLARE @err_msg AS NVARCHAR(MAX);
+BEGIN TRY
+  EXEC usp_PlaceOrder 45, '285753A', 5
+  SELECT * FROM Orders
+END TRY
+BEGIN CATCH
+  SET @err_msg = ERROR_MESSAGE();
+  SELECT @err_msg
+END CATCH
+
+SELECT * FROM OrderParts
+
+
+
+--------------- 12-------------DEC(18,2) !!!! no Money-------------------
+
+GO
+CREATE FUNCTION dbo.udf_GetCost(@JobId int)
+RETURNS DEC(18,2)
+AS
+BEGIN
+DECLARE @Result DEC(18,2)  
+
+IF NOT EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId)
+	RETURN 0
+
+
+SET @Result =  (SELECT Result FROM 
+  (SELECT j.JobId AS Id,SUM(p.Price * op.Quantity) AS Result 
+  FROM dbo.Jobs j
+  JOIN dbo.Orders o ON o.JobId = j.JobId
+  JOIN dbo.OrderParts op ON op.OrderId = o.OrderId
+  JOIN dbo.Parts p ON p.PartId = op.PartId
+  WHERE j.JobId = @JobId
+  GROUP BY j.JobId)s) 
+RETURN @Result
+ END
+GO
+SELECT dbo.udf_GetCost(10 )  -- scalar
+
+-----------------not for Judge------------------------
+CREATE OR ALTER FUNCTION dbo.udf_GetCost(@JobId int)
+RETURNS TABLE AS
+RETURN(
+  SELECT j.JobId AS Id,ISNULL(SUM(p.Price * op.Quantity),0) AS Result 
+  FROM dbo.Jobs j
+  JOIN dbo.Orders o ON o.JobId = j.JobId
+  JOIN dbo.OrderParts op ON op.OrderId = o.OrderId
+  JOIN dbo.Parts p ON p.PartId = op.PartId
+  WHERE j.JobId = @JobId
+  GROUP BY j.JobId)
+ 
+GO
