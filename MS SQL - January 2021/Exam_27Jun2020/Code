@@ -12,8 +12,7 @@ GO
 USE [Washing Machine Service]
 GO
 
-
-----------01.------------------
+----- DLL - Creating tables of Database --------------
 CREATE TABLE Clients
 (
 ClientId int PRIMARY KEY IDENTITY,
@@ -27,7 +26,7 @@ CREATE TABLE Mechanics
 MechanicId int PRIMARY KEY IDENTITY,
 FirstName varchar(50) NOT NULL,
 LastName varchar(50) NOT NULL,
-Address varchar(255) NOT NULL
+[Address] varchar(255) NOT NULL
 )
 
 CREATE TABLE Models
@@ -35,7 +34,6 @@ CREATE TABLE Models
 ModelId int PRIMARY KEY IDENTITY,
 [Name] varchar(50) UNIQUE NOT NULL
 )
-
 
 CREATE TABLE Jobs
 (
@@ -73,7 +71,6 @@ VendorId int NOT NULL REFERENCES Vendors(VendorId),
 StockQty int NOT NULL DEFAULT 0 CHECK(StockQty >=0)
 )
 
-
 CREATE TABLE OrderParts
 (
 OrderId int NOT NULL FOREIGN KEY REFERENCES Orders(OrderId),
@@ -86,7 +83,7 @@ CREATE TABLE PartsNeeded
 (
 JobId int NOT NULL FOREIGN KEY REFERENCES Jobs(JobId),
 PartId int NOT NULL FOREIGN KEY REFERENCES Parts(PartId),
-Quantity int NOT NULL DEFAULT 1 CHECK(Quantity > 0),
+Quantity int DEFAULT 1 CHECK(Quantity > 0),
 CONSTRAINT PK_PartsNeeded PRIMARY KEY (JobId,PartId)
 )
  
@@ -102,7 +99,7 @@ VALUES
 ('Melodie','Knipp','805-690-1682'),
 ('Candida','Corbley','908-275-8357')
 
-INSERT INTO Parts (SerialNumber,Description,Price,VendorId)
+INSERT INTO Parts (SerialNumber,[Description],Price,VendorId)
 VALUES
 ('WP8182119','Door Boot Seal',117.86,2),
 ('W10780048','Suspension Rod',42.81,1),
@@ -112,11 +109,10 @@ VALUES
 
 ----------- 03.--------------------
 UPDATE Jobs
-SET MechanicId = 3, Status = 'In Progress'
-WHERE [Status] = 'Pending'
+	SET MechanicId = 3, [Status] = 'In Progress'
+	WHERE [Status] = 'Pending'
  
-
-
+ 
 ---------- 04. -------------------
 DELETE FROM OrderParts
 WHERE OrderId = 19
@@ -125,71 +121,73 @@ DELETE FROM Orders
 WHERE OrderId = 19
 
 --------- 05. --------------------
-SELECT CONCAT(FirstName,' ',LastName) AS Mechanic, [Status],IssueDate 
-FROM Mechanics m
-JOIN Jobs j ON j.MechanicId = m.MechanicId
-ORDER BY m.MechanicId, IssueDate, JobId
-
+SELECT CONCAT(FirstName,' ',LastName) AS Mechanic,
+		 [Status],
+		 IssueDate 
+    FROM Mechanics m
+    JOIN Jobs j ON j.MechanicId = m.MechanicId
+ORDER BY m.MechanicId,
+		 IssueDate,
+		 JobId
 
 -------- 06. -------------------
 SELECT CONCAT(FirstName,' ',LastName) AS Client,
-DATEDIFF(day,IssueDate,'2017-04-24') AS [Days going],
-[Status]
-FROM Clients c
-JOIN Jobs j ON j.ClientId = c.ClientId AND Status <> 'Finished'
-ORDER BY [Days going] DESC, c.ClientId
-
+		DATEDIFF(day,IssueDate,'2017-04-24') AS [Days going],
+		[Status]
+    FROM Clients c
+	JOIN Jobs j ON j.ClientId = c.ClientId AND [Status] <> 'Finished'
+ORDER BY [Days going] DESC,
+         c.ClientId
 
 ----------- 07. -------------------
-SELECT Mechanic,[Average Days]
-FROM
-(
-SELECT m.MechanicId, CONCAT(FirstName,' ',LastName) AS Mechanic,
-AVG(DATEDIFF(day,IssueDate,FinishDate)) AS [Average Days] 
-FROM Mechanics m
-JOIN Jobs j ON j.MechanicId = m.MechanicId AND FinishDate IS NOT NULL
-GROUP BY m.MechanicId,m.FirstName,m.LastName) s
-ORDER BY MechanicId
+ SELECT CONCAT(FirstName,' ',LastName) AS Mechanic,
+		AVG(DATEDIFF(day,IssueDate,FinishDate)) AS [Average Days] 
+   FROM Mechanics m
+   JOIN Jobs j ON j.MechanicId = m.MechanicId AND FinishDate IS NOT NULL
+   GROUP BY m.MechanicId,m.FirstName,m.LastName 
+   ORDER BY m.MechanicId
 
 
 -------------- 08.------------------------
-SELECT CONCAT(FirstName,' ',LastName) AS Available
-FROM Mechanics m
-LEFT JOIN Jobs j ON j.MechanicId = m.MechanicId
-WHERE  j.JobId IS NULL OR 'Finished' = ALL(SELECT j.[Status] FROM Jobs j  
-              WHERE j.MechanicId = m.MechanicId)	  
-GROUP BY FirstName,LastName,m.MechanicId
-ORDER BY m.MechanicId
+    SELECT CONCAT(FirstName,' ',LastName) AS Available
+       FROM Mechanics m
+  LEFT JOIN Jobs j ON j.MechanicId = m.MechanicId
+      WHERE j.JobId IS NULL 
+	        OR 'Finished' = ALL(SELECT j.[Status]
+				    FROM Jobs j  
+				    WHERE j.MechanicId = m.MechanicId)	  
+   GROUP BY FirstName,LastName,m.MechanicId
+   ORDER BY m.MechanicId
 
 
   --------9.----------- trough Orders------
-  GO
 
- SELECT j.JobId, ISNULL(SUM(Price * op.Quantity),0.0) AS Total
- FROM Jobs j
+    SELECT j.JobId,
+		   ISNULL(SUM(Price * op.Quantity),0.0) AS Total
+	  FROM Jobs j
  LEFT JOIN Orders o ON o.JobId = j.JobId
  LEFT JOIN OrderParts op ON op.OrderId = o.OrderId     -- Quantity!!!!
  LEFT JOIN Parts p ON p.PartId = op.PartId
- --LEFT JOIN PartsNeeded pn ON pn.PartId = p.PartId AND pn.JobId = j.JobId  ----- !!!!!
-  WHERE j.Status = 'Finished' 
- GROUP BY j.JobID  
- ORDER BY Total DESC, j.JobId
+ 	 WHERE j.Status = 'Finished' 
+  GROUP BY j.JobID  
+  ORDER BY Total DESC,
+		   j.JobId
  
   
   ---------- 10  -------------------
  -- !!!!! FULL JOIN Jobs-Orders - NULL are Pending Orders
-
-
-SELECT p.PartId,p.[Description],
-	SUM(pn.Quantity) AS [Required],
-	SUM(p.StockQty) AS [In Stock], 0 AS Ordered
- FROM Jobs j
+ 
+   SELECT p.PartId,p.[Description],
+	      SUM(pn.Quantity) AS [Required],
+	      SUM(p.StockQty) AS [In Stock],
+		  0 AS Ordered
+     FROM Jobs j
 FULL JOIN Orders o ON j.JobId = o.JobId
-JOIN PartsNeeded pn ON pn.JobId = j.JobId
-JOIN Parts p ON p.PartId = pn.PartId
- WHERE j.Status <> 'Finished' AND o.Delivered IS NULL
+     JOIN PartsNeeded pn ON pn.JobId = j.JobId
+     JOIN Parts p ON p.PartId = pn.PartId
+    WHERE j.Status <> 'Finished' AND o.Delivered IS NULL
  GROUP BY p.PartId,p.Description
- HAVING SUM(p.StockQty) < SUM(pn.Quantity) 
+   HAVING SUM(p.StockQty) < SUM(pn.Quantity) 
 
  GO
  ------------- 11. --------------------
@@ -244,7 +242,7 @@ ELSE
 	END
  
 GO
-------------------------
+----------test---------
  DECLARE @err_msg AS NVARCHAR(MAX);
 BEGIN TRY
   EXEC usp_PlaceOrder 45, '285753A', 5
@@ -256,8 +254,6 @@ BEGIN CATCH
 END CATCH
 
 SELECT * FROM OrderParts
-
-
 
 --------------- 12-------------DEC(18,2) !!!! no Money-------------------
 
@@ -272,14 +268,17 @@ IF NOT EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId)
 	RETURN 0
 
 
-SET @Result =  (SELECT Result FROM 
-  (SELECT j.JobId AS Id,SUM(p.Price * op.Quantity) AS Result 
-  FROM dbo.Jobs j
-  JOIN dbo.Orders o ON o.JobId = j.JobId
-  JOIN dbo.OrderParts op ON op.OrderId = o.OrderId
-  JOIN dbo.Parts p ON p.PartId = op.PartId
-  WHERE j.JobId = @JobId
-  GROUP BY j.JobId)s) 
+SET @Result = 
+	(SELECT Result 
+	FROM 
+		  (SELECT j.JobId AS Id,
+				  SUM(p.Price * op.Quantity) AS Result 
+		  FROM dbo.Jobs j
+		  JOIN dbo.Orders o ON o.JobId = j.JobId
+		  JOIN dbo.OrderParts op ON op.OrderId = o.OrderId
+		  JOIN dbo.Parts p ON p.PartId = op.PartId
+		  WHERE j.JobId = @JobId
+		  GROUP BY j.JobId)s) 
 RETURN @Result
  END
 GO
@@ -298,3 +297,7 @@ RETURN(
   GROUP BY j.JobId)
  
 GO
+ 
+SELECT * FROM dbo.udf_GetCost(3) -- table 
+
+ 
