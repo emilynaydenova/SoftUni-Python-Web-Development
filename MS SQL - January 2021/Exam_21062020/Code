@@ -1,0 +1,270 @@
+/* Trip Service  */
+/* -------------- */
+/* You’ve been an intern at Krivodol Trip Service LLC ever since you finished high school. 
+The Krivodol Trip Service doesn’t really pay much, but it’s the only trip company within
+a 50km radius in northwestern Bulgaria. 
+You’ve recently been appointed as Chief Database Engineer. The Chief Database Engineer’s 
+job is to keep track of every single city, account, trip, hotel and hotel room – all on
+a giant ledger (paper, not blockchain), which has been passed down for the last 3 generations. 
+Word around the office is that the company is going to hire a few programmers to try and
+automate the entire process. As you know, the holidays are coming up, and of course, you want
+to go to the overpopulated, overpriced and overbuilt seaside just to post a couple of photos
+of your rakia-hardened beach body on your Instagram. So, you decided to design a relational
+database in SQL Server and let the new code monkeys take care of everything else. */
+
+
+
+
+CREATE DATABASE TripService
+GO
+
+USE TripService
+GO
+----------- 1 ----------------
+CREATE TABLE Cities
+(
+Id int PRIMARY KEY IDENTITY,
+[Name] nvarchar(20) NOT NULL,
+CountryCode CHAR(2) NOT NULL
+)
+CREATE TABLE Hotels 
+(
+Id int PRIMARY KEY IDENTITY,
+[Name] nvarchar(30) NOT NULL,
+CityId int REFERENCES Cities(Id) NOT NULL,
+EmployeeCount int NOT NULL,
+BaseRate DEC(10,2)
+)
+CREATE TABLE Rooms 
+(
+Id int PRIMARY KEY IDENTITY,
+Price DEC(10,2) NOT NULL,
+[Type] nvarchar(20) NOT NULL,
+Beds int NOT NULL,
+HotelId int REFERENCES Hotels(Id) NOT NULL
+)
+CREATE TABLE Trips 
+(
+Id int PRIMARY KEY IDENTITY,
+RoomId int REFERENCES Rooms(Id) NOT NULL,
+BookDate DATE NOT NULL,
+ArrivalDate DATE NOT NULL,
+ReturnDate DATE NOT NULL,
+CancelDate DATE,
+CONSTRAINT CK_Book_Arrival CHECK(BookDate < ArrivalDate),
+CONSTRAINT CK_Arrivel_Return CHECK(ArrivalDate < ReturnDate)
+)
+CREATE TABLE Accounts 
+(
+Id int PRIMARY KEY IDENTITY,
+FirstName nvarchar(50) NOT NULL,
+MiddleName nvarchar(20),
+LastName nvarchar(50) NOT NULL,
+CityId int REFERENCES Cities(Id) NOT NULL,
+BirthDate DATE NOT NULL,
+Email varchar(100) UNIQUE NOT NULL
+)
+CREATE TABLE AccountsTrips 
+(
+AccountId int REFERENCES Accounts(Id) NOT NULL,
+TripId int REFERENCES Trips(Id) NOT NULL,
+Luggage int NOT NULL CHECK(Luggage >= 0),
+CONSTRAINT PK_AccountId_TripId PRIMARY KEY(AccountId,TripID)    ---!!!!! 22p
+)
+
+
+---- 2 ---
+INSERT INTO Accounts (FirstName,MiddleName,LastName,CityId,BirthDate,Email)
+VALUES
+('John','Smith','Smith',34,'1975-07-21','j_smith@gmail.com'),
+('Gosho',NULL,'Petrov',11,'1978-05-16','g_petrov@gmail.com'),
+('Ivan','Petrovich','Pavlov',59,'1849-09-26','i_pavlov@softuni.bg'),
+('Friedrich','Wilhelm','Nietzsche',2,'1844-10-15','f_nietzsche@softuni.bg')
+
+INSERT INTO Trips (RoomId,BookDate,ArrivalDate,ReturnDate,CancelDate)
+VALUES
+(101,'2015-04-12','2015-04-14','2015-04-20','2015-02-02'),
+(102,'2015-07-07','2015-07-15','2015-07-22','2015-04-29'),
+(103,'2013-07-17','2013-07-23','2013-07-24',NULL),
+(104,'2012-03-17','2012-03-31','2012-04-01','2012-01-10'),
+(109,'2017-08-07','2017-08-28','2017-08-29',NULL)
+
+ 
+ --- 3. -------
+ SELECT * FROM Hotels
+ SELECT * FROM Rooms
+ UPDATE Rooms
+ SET Price *=1.14
+ WHERE HotelId IN (5,7,9)
+
+ --- 4 -----
+
+DELETE FROM AccountsTrips
+ WHERE AccountId = 47
+
+
+ --- 5. ---------------
+ SELECT FirstName,LastName,FORMAT(BirthDate,'MM-dd-yyyy'), c.[Name] AS Hometown, Email
+ FROM Accounts a
+ JOIN Cities c ON c.Id = a.CityId
+ WHERE Email LIKE 'e%' 
+ ORDER BY Hometown
+
+ --- 6-------
+ SELECT c.[Name] AS City, COUNT(h.id) AS Hotels
+ FROM Hotels h
+ JOIN Cities c ON h.CityId = c.Id
+ GROUP BY c.[Name]
+ ORDER BY Hotels DESC,City
+
+ ---- 7. ----------------
+ SELECT atr.AccountId,FirstName + ' '+ LastName AS FullName,
+ MAX(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS LongestTrip,
+ MIN(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS ShortestTrip
+ FROM AccountsTrips atr
+ JOIN Accounts a ON a.Id = atr.AccountId
+ JOIN Trips t ON t.Id = atr.TripId
+ WHERE MiddleName IS NULL AND t.CancelDate IS NULL
+ GROUP BY atr.AccountId,FirstName + ' '+ LastName
+ ORDER BY LongestTrip DESC, ShortestTrip 
+
+
+ --- 8.-----------------
+ SELECT TOP(10) c.Id,c.[Name] AS City,c.CountryCode AS Country,
+ COUNT(a.Id) AS Accounts
+ FROM Cities c
+ JOIN ACCOUNTS a ON a.CityId = c.ID
+ GROUP BY c.Id,c.[Name],c.CountryCode
+ ORDER BY Accounts  DESC
+GO
+
+---  9. -----------------
+ 
+ SELECT a.Id, a.Email,c.[Name] AS City, COUNT(t.Id) AS Trips
+ FROM Accounts a
+ JOIN AccountsTrips ac ON a.Id = ac.AccountId
+ JOIN Trips t ON t.Id = ac.TripId
+ JOIN Cities c ON c.Id = a.CityId
+ JOIN Rooms r ON r.Id = t.RoomId
+ JOIN Hotels h ON h.ID = r.HotelId
+ WHERE a.CityId = h.CityId
+ GROUP BY a.Id, a.Email,c.[Name]
+ ORDER BY Trips DESC, a.Id
+
+
+ --- 10. -----------------
+ SELECT t.id, 
+ REPLACE(CONCAT(a.FirstName,' ',ISNULL(a.MiddleName,''),' ',a.LastName),'  ',' ')
+ AS [Full Name],
+ c.[Name] AS [From], ch.[Name] AS [To], 
+ 'Duration' = 
+        CASE
+		WHEN t.CancelDate IS NOT NULL THEN CAST('Canceled' AS varchar)
+		ELSE CAST(DATEDIFF(day,t.ArrivalDate,t.ReturnDate) AS varchar) + ' days'
+		END
+ FROM Trips t
+ JOIN AccountsTrips att ON att.TripId  = t.Id
+ JOIN Accounts a ON a.Id = att.AccountId
+ JOIN Cities c ON c.Id = a.CityId
+ JOIN Rooms r ON r.ID = t.RoomId
+ JOIN Hotels h ON h.Id = r.HotelId
+ JOIN Cities ch ON ch.id = h.CityId
+ ORDER BY [Full Name],t.id
+
+ GO
+ 
+ --------11 .---------------------
+CREATE FUNCTION udf_GetAvailableRoom(@HotelId int, @Date date , @People int)
+RETURNS NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @AllRooms TABLE (Id INT)
+    INSERT INTO @AllRooms 
+    SELECT DISTINCT r.Id
+               FROM Rooms r
+          LEFT JOIN Trips t
+                 ON t.RoomId = r.Id
+              WHERE r.HotelId = @HotelId
+                AND @Date BETWEEN t.ArrivalDate AND t.ReturnDate
+                AND t.CancelDate IS NULL
+
+    DECLARE @Room TABLE (Id INT, Price DECIMAL(15, 2), Type NVARCHAR(20), Beds INT, TotalPrice DECIMAL(15, 2))
+    INSERT INTO @Room
+    SELECT TOP 1
+               r.Id,
+               r.Price,
+               r.Type,
+               r.Beds,
+               (h.BaseRate + r.Price) * @People AS [TotalPrice]
+          FROM Rooms r
+     LEFT JOIN Hotels h
+            ON h.Id = r.HotelId
+         WHERE r.HotelId = @HotelId
+           AND r.Beds >= @People
+           AND r.id NOT IN (SELECT Id FROM @AllRooms)
+      ORDER BY [TotalPrice] DESC
+
+    IF ((SELECT COUNT(*) FROM @Room) < 1)
+    BEGIN
+        RETURN 'No rooms available'
+    END
+
+    DECLARE @Result NVARCHAR(MAX)
+    SET @Result = (SELECT CONCAT('Room ', r.Id, ': ', r.Type, ' (', r.Beds, ' beds) - $', r.TotalPrice) FROM @Room r)
+
+    RETURN @Result
+END 
+
+
+
+GO
+-------------- 12. ------------------------
+
+CREATE PROC usp_SwitchRoom(@TripId int, @TargetRoomId int)
+AS
+DECLARE @HotelId int =
+(
+SELECT r.HotelId
+FROM Trips t
+JOIN Rooms r ON r.id = t.RoomId
+WHERE t.id =@TripId)
+
+DECLARE @FoundRoomId int =
+(SELECT r.Id
+FROM Rooms r
+WHERE r.HotelId = @HotelID AND r.id = @TargetRoomId)
+
+IF @FoundRoomId IS NULL
+BEGIN
+	;THROW 50001, 'Target room is in another hotel!',1
+END
+
+DECLARE @AcountsCount int =
+(
+SELECT COUNT(a.Id)
+FROM Trips t
+JOIN AccountsTrips at ON at.TripId = t.Id
+JOIN Accounts a ON at.AccountId = a.Id
+WHERE t.id = @TripId)
+
+DECLARE @RoomBeds int =
+(
+SELECT Beds FROM Rooms
+WHERE id = @TargetRoomId)
+
+IF @AcountsCount > @RoomBeds 
+BEGIN
+	;THROW 50001,'Not enough beds in target room!',1
+END
+
+UPDATE Trips
+SET RoomID = @TargetRoomId
+WHERE id = @TripId;
+
+--------
+
+GO
+EXEC usp_SwitchRoom 10, 11
+SELECT RoomId FROM Trips WHERE Id = 10
+EXEC usp_SwitchRoom 10, 7
+EXEC usp_SwitchRoom 10, 8
