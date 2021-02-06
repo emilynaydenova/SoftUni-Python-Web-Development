@@ -191,9 +191,10 @@ FULL JOIN Orders o ON j.JobId = o.JobId
 
  GO
  ------------- 11. --------------------
- CREATE PROC usp_PlaceOrder @JobId int, @SerialNumber varchar(50),@Quantity int
+ 
+  CREATE PROC usp_PlaceOrder @JobId int, @SerialNumber varchar(50),@Quantity int
  AS
-  
+--- Limitations -------  
 IF NOT EXISTS (SELECT JobId FROM Jobs WHERE JobId = @JobId) 
 	THROW 50013, 'Job not found!' , 1
 ELSE
@@ -208,29 +209,31 @@ IF NOT EXISTS (SELECT PartId FROM Parts WHERE SerialNumber = @SerialNumber)
 ELSE
      DECLARE @PartId int = (SELECT PartId FROM Parts WHERE SerialNumber = @SerialNumber)
 
-
 IF @Quantity <= 0 
 	THROW 50012, 'Part quantity must be more than zero!', 1
 
-DECLARE @OrderId int 
-IF EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId AND 
-							IssueDate IS NULL)
+DECLARE @OrderId int
+---- if order already exists ---------
+IF EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId AND IssueDate IS NULL)
 	BEGIN
-	SET @OrderId =(SELECT TOP(1) OrderId FROM Orders WHERE JobId=@JobId AND 
-							IssueDate IS NULL) 
-	IF NOT EXISTS (SELECT PartId FROM OrderParts 
-					WHERE OrderId = @OrderId AND PartId = @PartId)
-		BEGIN 
-		INSERT INTO OrderParts (OrderId,PartId,Quantity)
-			VALUES (@OrderId, @PartId, @Quantity)
-		END
-	ELSE
-		BEGIN
-		UPDATE OrderParts
-		SET Quantity +=@Quantity
-		WHERE OrderId = @OrderId AND PartId = @PartId
-		END
+		SET @OrderId =(SELECT TOP(1) OrderId FROM Orders WHERE JobId=@JobId AND 
+								IssueDate IS NULL) 
+		----- if the part not in that existing order -------- 
+		IF NOT EXISTS (SELECT PartId FROM OrderParts 
+						WHERE OrderId = @OrderId AND PartId = @PartId)
+			BEGIN 
+				INSERT INTO OrderParts (OrderId,PartId,Quantity)
+					VALUES (@OrderId, @PartId, @Quantity)
+			END
+		ELSE
+		 ----- if the part already in the order --------------
+			BEGIN
+				UPDATE OrderParts
+				SET Quantity +=@Quantity
+				WHERE OrderId = @OrderId AND PartId = @PartId
+			END
 	END
+----- order not exists ----------
 ELSE
 	BEGIN
 		INSERT INTO Orders (JobId,IssueDate)
@@ -256,8 +259,6 @@ END CATCH
 SELECT * FROM OrderParts
 
 --------------- 12-------------DEC(18,2) !!!! no Money-------------------
-
-GO
 CREATE FUNCTION dbo.udf_GetCost(@JobId int)
 RETURNS DEC(18,2)
 AS
@@ -269,22 +270,20 @@ IF NOT EXISTS (SELECT OrderId FROM Orders WHERE JobId=@JobId)
 
 
 SET @Result = 
-	(SELECT Result 
-	FROM 
-		  (SELECT j.JobId AS Id,
-				  SUM(p.Price * op.Quantity) AS Result 
+	(SELECT SUM(p.Price * op.Quantity) 
 		  FROM dbo.Jobs j
 		  JOIN dbo.Orders o ON o.JobId = j.JobId
 		  JOIN dbo.OrderParts op ON op.OrderId = o.OrderId
 		  JOIN dbo.Parts p ON p.PartId = op.PartId
 		  WHERE j.JobId = @JobId
-		  GROUP BY j.JobId)s) 
+		  GROUP BY j.JobId) 
 RETURN @Result
  END
-GO
+ GO
+-- test-- 
 SELECT dbo.udf_GetCost(10 )  -- scalar
 
------------------not for Judge------------------------
+----------------as table------------------------
 CREATE OR ALTER FUNCTION dbo.udf_GetCost(@JobId int)
 RETURNS TABLE AS
 RETURN(
@@ -297,7 +296,7 @@ RETURN(
   GROUP BY j.JobId)
  
 GO
- 
+-- test -- 
 SELECT * FROM dbo.udf_GetCost(3) -- table 
 
  
