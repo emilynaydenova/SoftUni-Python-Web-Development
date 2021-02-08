@@ -91,88 +91,91 @@ VALUES
 
  
  --- 3. -------
- SELECT * FROM Hotels
- SELECT * FROM Rooms
- UPDATE Rooms
- SET Price *=1.14
+
+UPDATE Rooms
+   SET Price *=1.14
  WHERE HotelId IN (5,7,9)
 
- --- 4 -----
+ --- 4. -----
 
 DELETE FROM AccountsTrips
- WHERE AccountId = 47
-
+      WHERE AccountId = 47
 
  --- 5. ---------------
- SELECT FirstName,LastName,FORMAT(BirthDate,'MM-dd-yyyy'), c.[Name] AS Hometown, Email
- FROM Accounts a
- JOIN Cities c ON c.Id = a.CityId
- WHERE Email LIKE 'e%' 
+   SELECT FirstName,
+          LastName,
+	  FORMAT(BirthDate,'MM-dd-yyyy'), 
+	  c.[Name] AS Hometown, 
+	  Email
+     FROM Accounts a
+     JOIN Cities c ON c.Id = a.CityId
+    WHERE Email LIKE 'e%' 
  ORDER BY Hometown
 
- --- 6-------
- SELECT c.[Name] AS City, COUNT(h.id) AS Hotels
- FROM Hotels h
- JOIN Cities c ON h.CityId = c.Id
+ --- 6. -----------------
+   SELECT c.[Name] AS City, COUNT(h.id) AS Hotels
+     FROM Hotels h
+     JOIN Cities c ON h.CityId = c.Id
  GROUP BY c.[Name]
  ORDER BY Hotels DESC,City
 
  ---- 7. ----------------
- SELECT atr.AccountId,FirstName + ' '+ LastName AS FullName,
- MAX(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS LongestTrip,
- MIN(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS ShortestTrip
- FROM AccountsTrips atr
- JOIN Accounts a ON a.Id = atr.AccountId
- JOIN Trips t ON t.Id = atr.TripId
- WHERE MiddleName IS NULL AND t.CancelDate IS NULL
+  SELECT atr.AccountId,FirstName + ' '+ LastName AS FullName,
+          MAX(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS LongestTrip,
+          MIN(DATEDIFF(day,t.ArrivalDate,t.ReturnDate)) AS ShortestTrip
+     FROM AccountsTrips atr
+     JOIN Accounts a ON a.Id = atr.AccountId
+     JOIN Trips t ON t.Id = atr.TripId
+    WHERE MiddleName IS NULL 
+      AND t.CancelDate IS NULL
  GROUP BY atr.AccountId,FirstName + ' '+ LastName
  ORDER BY LongestTrip DESC, ShortestTrip 
 
-
  --- 8.-----------------
- SELECT TOP(10) c.Id,c.[Name] AS City,c.CountryCode AS Country,
- COUNT(a.Id) AS Accounts
- FROM Cities c
- JOIN ACCOUNTS a ON a.CityId = c.ID
+ SELECT TOP(10) c.Id,
+          c.[Name] AS City,
+          c.CountryCode AS Country,
+          COUNT(a.Id) AS Accounts
+     FROM Cities c
+     JOIN ACCOUNTS a ON a.CityId = c.ID
  GROUP BY c.Id,c.[Name],c.CountryCode
  ORDER BY Accounts  DESC
-GO
 
 ---  9. -----------------
  
- SELECT a.Id, a.Email,c.[Name] AS City, COUNT(t.Id) AS Trips
- FROM Accounts a
- JOIN AccountsTrips ac ON a.Id = ac.AccountId
- JOIN Trips t ON t.Id = ac.TripId
- JOIN Cities c ON c.Id = a.CityId
- JOIN Rooms r ON r.Id = t.RoomId
- JOIN Hotels h ON h.ID = r.HotelId
- WHERE a.CityId = h.CityId
+   SELECT a.Id,
+   	  a.Email,
+	  c.[Name] AS City,
+	  COUNT(t.Id) AS Trips
+     FROM Accounts a
+     JOIN AccountsTrips ac ON a.Id = ac.AccountId
+     JOIN Trips t ON t.Id = ac.TripId
+     JOIN Cities c ON c.Id = a.CityId
+     JOIN Rooms r ON r.Id = t.RoomId
+     JOIN Hotels h ON h.ID = r.HotelId
+    WHERE a.CityId = h.CityId
  GROUP BY a.Id, a.Email,c.[Name]
  ORDER BY Trips DESC, a.Id
 
-
  --- 10. -----------------
- SELECT t.id, 
- REPLACE(CONCAT(a.FirstName,' ',ISNULL(a.MiddleName,''),' ',a.LastName),'  ',' ')
- AS [Full Name],
- c.[Name] AS [From], ch.[Name] AS [To], 
- 'Duration' = 
-        CASE
-		WHEN t.CancelDate IS NOT NULL THEN CAST('Canceled' AS varchar)
-		ELSE CAST(DATEDIFF(day,t.ArrivalDate,t.ReturnDate) AS varchar) + ' days'
-		END
- FROM Trips t
- JOIN AccountsTrips att ON att.TripId  = t.Id
- JOIN Accounts a ON a.Id = att.AccountId
- JOIN Cities c ON c.Id = a.CityId
- JOIN Rooms r ON r.ID = t.RoomId
- JOIN Hotels h ON h.Id = r.HotelId
- JOIN Cities ch ON ch.id = h.CityId
+   SELECT t.id, 
+         CONCAT(a.FirstName,' ',a.MiddleName +' ',a.LastName) AS [Full Name],
+         c.[Name] AS [From],
+ 	 ch.[Name] AS [To], 
+	 'Duration' = 
+		CASE
+			WHEN t.CancelDate IS NOT NULL THEN CAST('Canceled' AS varchar)
+			ELSE CAST(DATEDIFF(day,t.ArrivalDate,t.ReturnDate) AS varchar) + ' days'
+			END
+     FROM Trips t
+     JOIN AccountsTrips att ON att.TripId  = t.Id
+     JOIN Accounts a ON a.Id = att.AccountId
+     JOIN Cities c ON c.Id = a.CityId
+     JOIN Rooms r ON r.ID = t.RoomId
+     JOIN Hotels h ON h.Id = r.HotelId
+     JOIN Cities ch ON ch.id = h.CityId
  ORDER BY [Full Name],t.id
 
- GO
- 
  --------11 .---------------------
 CREATE FUNCTION udf_GetAvailableRoom(@HotelId int, @Date date , @People int)
 RETURNS NVARCHAR(MAX)
@@ -223,16 +226,19 @@ GO
 CREATE PROC usp_SwitchRoom(@TripId int, @TargetRoomId int)
 AS
 DECLARE @HotelId int =
-(
-SELECT r.HotelId
-FROM Trips t
-JOIN Rooms r ON r.id = t.RoomId
-WHERE t.id =@TripId)
+	(
+	SELECT r.HotelId
+	 FROM Trips t
+	 JOIN Rooms r ON r.id = t.RoomId
+	WHERE t.id =@TripId
+	)
 
 DECLARE @FoundRoomId int =
-(SELECT r.Id
-FROM Rooms r
-WHERE r.HotelId = @HotelID AND r.id = @TargetRoomId)
+	(
+	SELECT r.Id
+	  FROM Rooms r
+	 WHERE r.HotelId = @HotelID AND r.id = @TargetRoomId
+	 )
 
 IF @FoundRoomId IS NULL
 BEGIN
@@ -240,17 +246,18 @@ BEGIN
 END
 
 DECLARE @AcountsCount int =
-(
-SELECT COUNT(a.Id)
-FROM Trips t
-JOIN AccountsTrips at ON at.TripId = t.Id
-JOIN Accounts a ON at.AccountId = a.Id
-WHERE t.id = @TripId)
-
+	(
+	SELECT COUNT(a.Id)
+	  FROM Trips t
+	  JOIN AccountsTrips at ON at.TripId = t.Id
+	  JOIN Accounts a ON at.AccountId = a.Id
+	 WHERE t.id = @TripId
+	 )
+ 
 DECLARE @RoomBeds int =
 (
 SELECT Beds FROM Rooms
-WHERE id = @TargetRoomId)
+ WHERE id = @TargetRoomId)
 
 IF @AcountsCount > @RoomBeds 
 BEGIN
@@ -258,8 +265,8 @@ BEGIN
 END
 
 UPDATE Trips
-SET RoomID = @TargetRoomId
-WHERE id = @TripId;
+   SET RoomID = @TargetRoomId
+ WHERE id = @TripId;
 
 --------
 
