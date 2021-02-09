@@ -20,7 +20,7 @@ GO
 
 USE TripService
 GO
------------ 1 ----------------
+----- 1. --------------------
 CREATE TABLE Cities
 (
 Id int PRIMARY KEY IDENTITY,
@@ -73,7 +73,7 @@ CONSTRAINT PK_AccountId_TripId PRIMARY KEY(AccountId,TripID)    ---!!!!! 22p
 )
 
 
----- 2 ---
+---- 2. ---
 INSERT INTO Accounts (FirstName,MiddleName,LastName,CityId,BirthDate,Email)
 VALUES
 ('John','Smith','Smith',34,'1975-07-21','j_smith@gmail.com'),
@@ -178,49 +178,31 @@ DELETE FROM AccountsTrips
 
  --------11 .---------------------
 CREATE FUNCTION udf_GetAvailableRoom(@HotelId int, @Date date , @People int)
-RETURNS NVARCHAR(MAX)
+RETURNS Nvarchar(max)
 AS
 BEGIN
-    DECLARE @AllRooms TABLE (Id INT)
-    INSERT INTO @AllRooms 
-    SELECT DISTINCT r.Id
-               FROM Rooms r
-          LEFT JOIN Trips t
-                 ON t.RoomId = r.Id
-              WHERE r.HotelId = @HotelId
-                AND @Date BETWEEN t.ArrivalDate AND t.ReturnDate
-                AND t.CancelDate IS NULL
+ DECLARE @RoomInfo varchar(100) =
+               (
+		SELECT TOP(1)CONCAT('Room ',r.Id,': ',r.Type,' (',Beds,' beds) - $',(h.BaseRate + r.Price) * @People)						
+				FROM Rooms r
+			        JOIN Hotels h ON r.HotelId = h.id
+			   LEFT JOIN Trips t ON t.RoomId = r.Id
+			       WHERE r.HotelId = @HotelId 
+				 AND r.Beds >= @People
+		                 AND NOT EXISTS( SELECT * FROM Trips t 
+						  WHERE t.RoomId = r.Id 
+						  AND @Date BETWEEN t.ArrivalDate AND t.ReturnDate  
+				                  AND t.CancelDate IS NULL
+						)
+				ORDER BY ((h.BaseRate + r.Price) * @People) DESC
+		)
 
-    DECLARE @Room TABLE (Id INT, Price DECIMAL(15, 2), Type NVARCHAR(20), Beds INT, TotalPrice DECIMAL(15, 2))
-    INSERT INTO @Room
-    SELECT TOP 1
-               r.Id,
-               r.Price,
-               r.Type,
-               r.Beds,
-               (h.BaseRate + r.Price) * @People AS [TotalPrice]
-          FROM Rooms r
-     LEFT JOIN Hotels h
-            ON h.Id = r.HotelId
-         WHERE r.HotelId = @HotelId
-           AND r.Beds >= @People
-           AND r.id NOT IN (SELECT Id FROM @AllRooms)
-      ORDER BY [TotalPrice] DESC
+IF @RoomInfo IS NULL
+   RETURN 'No rooms available' 
 
-    IF ((SELECT COUNT(*) FROM @Room) < 1)
-    BEGIN
-        RETURN 'No rooms available'
-    END
+RETURN @RoomInfo
+END
 
-    DECLARE @Result NVARCHAR(MAX)
-    SET @Result = (SELECT CONCAT('Room ', r.Id, ': ', r.Type, ' (', r.Beds, ' beds) - $', r.TotalPrice) FROM @Room r)
-
-    RETURN @Result
-END 
-
-
-
-GO
 -------------- 12. ------------------------
 
 CREATE PROC usp_SwitchRoom(@TripId int, @TargetRoomId int)
