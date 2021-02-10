@@ -1,0 +1,190 @@
+CREATE DATABASE SCHOOL
+GO
+USE SCHOOL
+GO
+---------- 01. --------------------
+ CREATE TABLE Students
+(
+Id INT PRIMARY KEY IDENTITY,
+FirstName NVARCHAR(30) NOT NULL,
+MiddleName NVARCHAR(25),
+LastName NVARCHAR(30) NOT NULL,
+Age SMALLINT CHECK(Age BETWEEN 5 AND 100),
+[Address] NVARCHAR(50),
+Phone NCHAR(10)
+)
+
+CREATE TABLE Subjects
+(
+Id INT PRIMARY KEY IDENTITY,
+[Name] NVARCHAR(20) NOT NULL,
+Lessons INT CHECK(Lessons > 0 ) NOT NULL
+)
+
+CREATE TABLE StudentsSubjects
+(
+Id INT PRIMARY KEY IDENTITY,
+StudentId INT FOREIGN KEY REFERENCES Students(Id) NOT NULL,
+SubjectId INT FOREIGN KEY REFERENCES Subjects(Id) NOT NULL,
+Grade DEC(3,2) CHECK(Grade BETWEEN 2 AND 6) NOT NULL,
+)
+
+CREATE TABLE Exams
+(
+Id INT PRIMARY KEY IDENTITY,
+[Date] DATETIME,
+SubjectId INT FOREIGN KEY REFERENCES Subjects(Id) NOT NULL
+)
+
+CREATE TABLE StudentsExams
+(
+StudentId INT FOREIGN KEY REFERENCES Students(Id) NOT NULL,
+ExamId INT FOREIGN KEY REFERENCES Exams(Id) NOT NULL,
+Grade DEC(3,2) CHECK(Grade BETWEEN 2 AND 6) NOT NULL,
+CONSTRAINT PK_CompositeStudentIDExamId PRIMARY KEY(StudentId,ExamId)
+)
+
+CREATE TABLE Teachers
+(
+Id INT PRIMARY KEY IDENTITY,
+FirstName NVARCHAR(20) NOT NULL,
+LastName NVARCHAR(20) NOT NULL,
+[Address] NVARCHAR(20) NOT NULL,
+Phone CHAR(10),
+SubjectId INT FOREIGN KEY REFERENCES Subjects NOT NULL
+)
+
+CREATE TABLE StudentsTeachers
+(
+StudentId INT FOREIGN KEY REFERENCES Students(Id) NOT NULL,
+TeacherId INT FOREIGN KEY REFERENCES Teachers(Id) NOT NULL,
+CONSTRAINT PK_CompositeStudentIdTeacherId PRIMARY KEY(StudentId,TeacherId)
+)
+
+--------- 02. ----------------
+INSERT INTO Subjects
+VALUES
+('Geometry',12),
+('Health',10),
+('Drama',7),
+('Sports',9)
+
+INSERT INTO Teachers
+VALUES
+('Ruthanne', 'Bamb',	'84948 Mesta Junction',	'3105500146',6),
+('Gerrard','Lowin','370 Talisman Plaza','3324874824',2),
+('Merrile','Lambdin','81 Dahle Plaza','4373065154',5),
+('Bert','Ivie','2 Gateway Circle','4409584510',4)
+
+
+---------- 03. ----------------------
+UPDATE StudentsSubjects
+   SET Grade=6
+ WHERE SubjectId IN(1,2) AND Grade >= 5.50
+
+ ---------- 04. --------------------
+ DELETE FROM StudentsTeachers
+       WHERE TeacherID IN
+            (SELECT id
+			   FROM Teachers
+			   WHERE Phone LIKE '%72%'
+			   )  -----CHARINDEX('72',Phone,1) > 0)
+
+DELETE FROM Teachers
+      WHERE Phone LIKE '%72%'
+ 
+ ----------- 05. --------------------
+   SELECT FirstName,
+          LastName,
+		  Age
+     FROM Students
+    WHERE Age >=12
+ ORDER BY FirstName,
+          LastName
+
+----------- 06. -------------------
+    SELECT s.FirstName,
+           s.LastName,
+	       Count(st.TeacherId) AS TeachersCount
+      FROM Students AS s
+ LEFT JOIN StudentsTeachers AS st ON st.StudentId =s.id
+  GROUP BY s.FirstName,s.LastName
+    
+---------- 07. --------------------
+   SELECT CONCAT(FirstName,' ',LastName) AS [Full Name] 
+     FROM Students s
+LEFT JOIN StudentsExams se ON se.StudentId = s.Id
+    WHERE se.ExamId IS NULL   
+ ORDER BY [Full Name]
+
+ --------- 08. --------------------
+SELECT TOP(10)
+         s.FirstName,
+         s.LastName,
+	     FORMAT(AVG(se.Grade),'F2') AS Grade
+    FROM Students s
+    JOIN StudentsExams se ON se.StudentId = s.Id
+GROUP BY s.FirstName,s.LastName
+ORDER BY Grade DESC,
+         FirstName,
+		 LastName
+
+-- CAST(AVG(se.Grade) AS DEC(3,2)) AS Grade 
+
+---------- 09. ---------------------
+   SELECT CONCAT(FirstName,(' ' + MiddleName),' ',LastName) AS [Full Name] 
+     FROM Students s
+LEFT JOIN StudentsSubjects se ON se.StudentId = s.Id
+    WHERE se.SubjectId IS NULL   
+ ORDER BY [Full Name]
+
+ ---------- 10. -----------------------
+SELECT  s.[Name], AVG(ss.Grade) AS AverageGrade
+FROM StudentsSubjects ss
+JOIN Subjects s ON s.Id = ss.SubjectId
+GROUP BY s.Name,s.Id 
+ORDER BY s.Id    ----- !!!! без да е в селекта
+
+ 
+----------- 11. ------------------
+CREATE FUNCTION udf_ExamGradesToUpdate(@studentId int, @grade DEC(3,2))
+RETURNS VARCHAR(MAX)
+AS
+BEGIN
+IF @grade > 6.00 
+	RETURN 'Grade cannot be above 6.00!'
+ 
+IF NOT EXISTS (SELECT Id FROM Students WHERE Id=@studentId)
+	RETURN 'The student with provided id does not exist in the school!'
+
+DECLARE @Result VARCHAR(MAX) = 
+(
+SELECT CONCAT('You have to update ',
+               COUNT(*),
+              ' grades for the student ',
+		      (SELECT s.[FirstName] FROM Students s WHERE s.Id = @studentId))
+		FROM StudentsExams
+		WHERE StudentId = @studentId AND Grade BETWEEN @grade AND (@grade+0.5)
+)
+RETURN @Result
+END
+
+---------- 12. --------------------
+CREATE OR ALTER PROC usp_ExcludeFromSchool(@StudentId int)
+AS
+IF (SELECT TOP(1) Id FROM Students WHERE id = @studentId) IS NULL 
+	THROW 50001, 'This school has no student with the provided id!',1
+
+DELETE FROM StudentsSubjects
+WHERE StudentID = @StudentId
+
+DELETE FROM StudentsExams 
+WHERE StudentId = @StudentId
+
+DELETE FROM StudentsTeachers
+WHERE StudentId = @StudentId
+
+DELETE FROM Students
+WHERE id = @StudentId;
+GO
+ 
