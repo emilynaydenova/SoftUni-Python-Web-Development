@@ -1,0 +1,289 @@
+USE Diablo
+GO
+
+--- Problem 01. -----------------
+  SELECT RIGHT(Email, LEN(Email) - CHARINDEX('@', email)) AS EmailProvider, 
+			COUNT(*) AS [Number Of Users]
+FROM Users
+GROUP BY RIGHT(Email, LEN(Email) - CHARINDEX('@', email))
+ORDER BY [Number of Users] DESC,EmailProvider
+
+--- Problem 02. ----------------
+
+   SELECT g.[Name] AS Game,
+          gt.[Name] AS [Game Type],
+          u.Username,
+	      ug.[Level],
+		  ug.Cash,
+		  c.[Name] AS [Character]
+     FROM UsersGames ug  
+     JOIN Users u ON u.Id = ug.UserId
+     JOIN Games g ON g.Id = ug.GameId 
+     JOIN Characters c ON ug.CharacterId = c.Id
+     JOIN GameTypes gt ON gt.Id = g.GameTypeId
+ORDER BY ug.[Level] DESC,
+         u.Username,
+		 Game
+
+
+----------- Problem 03. -------------
+
+  SELECT u.Username, 
+         g.[Name] AS Game,
+		 COUNT(ugi.ItemId) AS [Items Count],
+	     SUM(i.Price) AS [Items Price]
+    FROM UsersGames ug  
+    JOIN Users u ON u.Id = ug.UserId
+    JOIN Games g ON g.Id = ug.GameId
+    JOIN UserGameItems ugi ON ugi.UserGameId = ug.Id
+    JOIN Items i ON i.Id = ugi.ItemId
+GROUP BY u.Username, g.[Name]
+  HAVING COUNT(ugi.ItemId) >= 10
+ORDER BY [Items Count] DESC,
+         [Items Price] DESC,
+		 u.Username
+
+--------- ***** 4 ---------!!!!!!!----------
+
+SELECT  u.Username, 
+		g.[Name] AS Game,
+		MAX(c.[Name]) AS [Character],
+		SUM(si.Strength) + MAX(sg.Strength) + MAX(sc.Strength) AS Strength, 
+		SUM(si.Defence) +  MAX(sg.Defence)  + MAX(sc.Defence) AS Defence,
+		SUM(si.Speed)   +  MAX(sg.Speed)    + MAX(sc.Speed) AS Speed,
+		SUM(si.Mind)    +  MAX(sg.Mind)     + MAX(sc.Mind) AS Mind,
+		SUM(si.Luck)    +  MAX(sg.Luck)     + MAX(sc.Luck) AS Luck
+FROM UsersGames ug 
+JOIN Users u ON u.Id = ug.UserId
+JOIN Games g ON g.Id = ug.GameId
+
+JOIN UserGameItems ugt ON ugt.UserGameId = ug.Id
+JOIN Items i ON i.id = ugt.ItemId
+JOIN [Statistics] si ON i.StatisticId = si.Id 
+
+JOIN GameTypes gt ON gt.Id = g.GameTypeId
+JOIN [Statistics] sg ON gt.BonusStatsId = sg.Id 
+
+JOIN Characters c ON c.Id = ug.CharacterId
+JOIN [Statistics] sc ON c.StatisticId = sc.Id 
+GROUP BY u.Username,g.[Name] 
+ORDER BY Strength DESC,Defence DESC,Speed DESC,Mind DESC,Luck DESC;
+
+
+
+------------ 5 ---AVG !!!!!------------------
+ 
+  SELECT i.[Name],
+         i.Price,
+		 i.MinLevel,
+		 Strength,
+		 Defence,
+		 Speed,
+		 Luck,
+		 Mind 
+   FROM Items i
+   JOIN [Statistics] s ON s.Id = i.StatisticId
+  WHERE Mind > (SELECT  AVG(Mind) 
+				FROM Items ii 
+				JOIN [Statistics] ss ON ss.Id = ii.StatisticId
+				) 
+	AND Luck > (SELECT  AVG(Luck) 
+				FROM Items ii 
+				JOIN [Statistics] ss ON ss.Id = ii.StatisticId
+				) 
+    AND Speed > (SELECT  AVG(Speed) 
+				FROM Items ii 
+				JOIN [Statistics] ss ON ss.Id = ii.StatisticId
+				)       
+ORDER BY i.[Name]
+
+ ---------------- 6. --------------------
+    SELECT i.[Name],
+	       i.Price,
+		   i.MinLevel,
+		   gt.[Name] AS [Forbidden Game Type]   
+      FROM Items i
+ LEFT JOIN GameTypeForbiddenItems gfi ON gfi.ItemId = i.Id
+ LEFT JOIN GameTypes gt ON gt.Id = gfi.GameTypeId
+  ORDER BY gt.[Name] DESC,i.[Name] 
+
+
+ ---------------7. -----!!!!! ****-----------
+
+ DECLARE @UserId     int = (SELECT Id FROM Users WHERE Username = 'Alex')
+ DECLARE @GameId     int = (SELECT Id FROM Games WHERE [Name] = 'Edinburgh')
+ DECLARE @UserGameId int = (SELECT Id FROM UsersGames WHERE UserId = @UserID
+										                AND GameId = @GameId)
+ DECLARE @Cash     money = (SELECT Cash FROM UsersGames WHERE  Id = @UserGameId)
+ 
+ DECLARE @Price    money = (SELECT SUM(Price)
+							 FROM Items 
+							 WHERE [Name] IN ('Blackguard', 'Bottomless Potion of Amplification', 
+								'Eye of Etlich (Diablo III)', 'Gem of Efficacious Toxin', 
+								'Golden Gorget of Leoric', 'Hellfire Amulet')
+							 )
+
+ IF @Price <= @Cash
+ BEGIN
+	  INSERT INTO UserGameItems (ItemId,UserGameId)
+		SELECT  Id, @UserGameId 
+		FROM Items
+		WHERE [Name] IN ('Blackguard', 'Bottomless Potion of Amplification', 
+						 'Eye of Etlich (Diablo III)', 'Gem of Efficacious Toxin', 
+						 'Golden Gorget of Leoric', 'Hellfire Amulet')
+
+		 UPDATE UsersGames
+		 SET Cash = @Cash - @Price
+		 WHERE id = @UserGameId
+ END
+ 
+   SELECT u.Username,g.[Name] , 
+          ug.Cash,
+		  i.[Name] AS [Item Name]
+     FROM UsersGames ug
+     JOIN Users u ON ug.UserId = u.Id
+     JOIN Games g ON g.Id = ug.GameId
+     JOIN UserGameItems ugi ON ugi.UserGameId = ug.Id
+     JOIN Items i ON i.Id = ugi.ItemId
+    WHERE g.[Name] = 'Edinburgh'
+ ORDER BY i.Name
+
+---- GEOGRAPHY ---------------------
+USE Geography
+GO
+
+---------------- 8 ---------------
+  SELECT PeakName,
+         MountainRange AS Mountain,
+		 Elevation
+    FROM Peaks p
+    JOIN Mountains m ON m.Id = p.MountainId
+ORDER BY Elevation DESC,PeakName
+
+
+----------- 9 ---------------------
+  SELECT PeakName, 
+         MountainRange AS Mountain,
+		 c.CountryName,
+		 co.ContinentName
+    FROM Peaks p
+    JOIN Mountains m ON m.Id = p.MountainId
+    JOIN MountainsCountries mc ON mc.MountainId = m.Id
+    JOIN Countries c ON c.CountryCode = mc.CountryCode
+    JOIN Continents co ON co.ContinentCode = c.ContinentCode
+ORDER BY PeakName,
+         CountryName
+
+
+----------- 10 -------------------------------
+
+SELECT c.CountryName, ct.ContinentName, 
+	ISNULL(COUNT(r.Id),0) AS RiversCount,
+	ISNULL(SUM(r.[Length]),0) AS TotalLength
+FROM Countries c
+LEFT JOIN CountriesRivers cr ON cr.CountryCode = c.CountryCode
+LEFT JOIN Rivers r ON r.Id = cr.RiverId
+JOIN Continents ct ON ct.ContinentCode = c.ContinentCode
+GROUP BY c.CountryName,ct.ContinentName
+ORDER BY RiversCount DESC, TotalLength DESC, c.CountryName
+
+
+------------- 11 ---------------------------
+
+SELECT cr.CurrencyCode AS CurrencyCode,
+		cr.[Description] AS Currency,
+		COUNT(c.CountryCode) AS NumberOfCountries
+FROM Currencies cr
+LEFT JOIN Countries c ON c.CurrencyCode = cr.CurrencyCode
+GROUP BY cr.CurrencyCode,cr.[Description]
+ORDER BY NumberOfCountries DESC,cr.[Description]
+
+
+--------------- 12 ----------------------------
+
+   SELECT cnt.ContinentName, 
+		  SUM(c.AreaInSqKm) AS CountriesArea,
+		  SUM(CAST(c.[Population] AS BIGINT)) AS CountriesPopulation
+     FROM Continents cnt
+LEFT JOIN Countries c ON cnt.ContinentCode = c.ContinentCode
+ GROUP BY cnt.ContinentName
+ ORDER BY CountriesPopulation DESC
+
+
+--------------- 13 ----------------------------
+--1
+CREATE TABLE Monasteries
+(
+Id int PRIMARY KEY IDENTITY,
+[Name] nvarchar(100) NOT NULL,
+CountryCode char(2) REFERENCES Countries(CountryCode)
+) 
+--2
+ INSERT INTO Monasteries(Name, CountryCode)
+ VALUES
+	('Rila Monastery “St. Ivan of Rila”', 'BG'), 
+	('Bachkovo Monastery “Virgin Mary”', 'BG'),
+	('Troyan Monastery “Holy Mother''s Assumption”', 'BG'),
+	('Kopan Monastery', 'NP'),
+	('Thrangu Tashi Yangtse Monastery', 'NP'),
+	('Shechen Tennyi Dargyeling Monastery', 'NP'),
+	('Benchen Monastery', 'NP'),
+	('Southern Shaolin Monastery', 'CN'),
+	('Dabei Monastery', 'CN'),
+	('Wa Sau Toi', 'CN'),
+	('Lhunshigyia Monastery', 'CN'),
+	('Rakya Monastery', 'CN'),
+	('Monasteries of Meteora', 'GR'),
+	('The Holy Monastery of Stavronikita', 'GR'),
+	('Taung Kalat Monastery', 'MM'),
+	('Pa-Auk Forest Monastery', 'MM'),
+	('Taktsang Palphug Monastery', 'BT'),
+	('Sümela Monastery', 'TR')
+
+--3
+ALTER TABLE Countries
+        ADD IsDeleted bit DEFAULT 0 NOT NULL  --- FALSE
+
+--4
+UPDATE Countries
+   SET IsDeleted = 1
+ WHERE CountryCode IN 
+		(SELECT c.CountryCode
+		  FROM Countries c
+		  JOIN CountriesRivers cr ON cr.CountryCode = c.CountryCode
+		  GROUP BY c.CountryCode
+		  HAVING COUNT(cr.RiverId) > 3
+		 )
+
+ --5
+   SELECT m.[Name] AS Monastery,
+          c.CountryName AS Country
+     FROM Monasteries m
+     JOIN Countries c ON c.CountryCode = m.CountryCode
+    WHERE c.IsDeleted = 0
+ ORDER BY m.[Name]
+
+
+ ------------ 14. ---------------------
+--1   
+ UPDATE Countries 
+    SET CountryName = 'Burma'
+  WHERE CountryName = 'Myanmar'
+
+ --2,3
+ INSERT INTO Monasteries ([Name],CountryCode)
+ VALUES
+	 ('Hanga Abbey',(SELECT CountryCode FROM Countries WHERE CountryName = 'Tanzania')),
+	 ('Myin-Tin-Daik',(SELECT CountryCode FROM Countries WHERE CountryName = 'Myanmar'))
+ 
+ --4
+    SELECT cnt.ContinentName,
+	         c.CountryName,
+			 COUNT(m.Id) AS MonastariesCount
+      FROM Continents cnt
+ LEFT JOIN Countries c ON c.ContinentCode = cnt.ContinentCode AND c.IsDeleted = 0
+ LEFT JOIN Monasteries m ON m.CountryCode = c.CountryCode
+  GROUP BY c.CountryName,
+           cnt.ContinentName
+  ORDER BY MonastariesCount DESC, 
+           c.CountryName
