@@ -1,0 +1,3 @@
+User for administration:
+username: user
+password: 123456
