@@ -1,0 +1,30 @@
+from project.food import Food
+from project.drink import Drink
+from project.product_repository import ProductRepository
+
+food = Food("apple")
+drink = Drink("water")
+repo = ProductRepository()
+repo.add(food)
+repo.add(drink)
+print(repo.products)
+print(repo.find("water"))
+repo.find("apple").decrease(5)
+print(repo)
+#
+pr = ProductRepository()
+p1 = Food('bread')
+pr.add(p1)
+p2 = Drink('boza')
+pr.add(p2)
+print(pr)
+print(f'Products count: {pr.count}')
+p1.increase(19)
+print(pr)
+p2.decrease(19)
+print(pr)
+print(pr.find('boza'))
+print(pr.find('water'))
+print(pr.remove('bread'))
+print(pr)
+print(f'Products count: {pr.count}')
