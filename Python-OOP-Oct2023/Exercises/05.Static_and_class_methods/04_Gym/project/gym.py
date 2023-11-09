@@ -4,6 +4,7 @@ from project.trainer import Trainer
 from project.exercise_plan import ExercisePlan
 from project.subscription import Subscription
 
+
 class Gym:
     def __init__(self):
         self.customers = []
@@ -28,7 +29,7 @@ class Gym:
         if plan not in self.plans:
             self.plans.append(plan)
 
-    def add_subscription(self,subscription: Subscription):
+    def add_subscription(self, subscription: Subscription):
         if subscription not in self.subscriptions:
             self.subscriptions.append(subscription)
 
@@ -36,10 +37,10 @@ class Gym:
         subscription = [s for s in self.subscriptions if s.id == subscription_id][0]
         customer = [c for c in self.customers if c.id == subscription.customer_id][0]
         trainer = [t for t in self.trainers if t.id == subscription.trainer_id][0]
-        equipment = [e for e in self.equipment if e.id == subscription.exercise_id][0]
         plan = [p for p in self.plans if p.id == subscription.exercise_id][0]
+        equipment = [e for e in self.equipment if e.id == plan.equipment_id][0]
 
-        result = subscription.__repr__() + '\n'  + \
-            customer.__repr__() + '\n' + trainer.__repr__() + '\n'  + \
-            equipment.__repr__() + '\n' + plan.__repr__()
+        result = (subscription.__repr__() + '\n' +
+                  customer.__repr__() + '\n' + trainer.__repr__() + '\n' +
+                  equipment.__repr__() + '\n' + plan.__repr__())
         return result
